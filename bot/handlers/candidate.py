@@ -11,6 +11,12 @@ from models.candidate import CandidateRecord
 
 logger = logging.getLogger(__name__)
 TS = CANDIDATE_TOTAL_STEPS
+FILE_TIMEOUTS = {
+    "read_timeout": 60,
+    "write_timeout": 60,
+    "connect_timeout": 60,
+    "pool_timeout": 60,
+}
 
 def _d(ctx): return ctx.user_data.setdefault("candidate", {})
 def _ms(ctx, f): return ctx.user_data.setdefault(f"_ms_{f}", set())
@@ -62,16 +68,6 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text(t("candidate.step_resume", lang), reply_markup=kb.skip_back_kb(lang))
         return C_RESUME_UPLOAD
     await update.message.reply_text(t("candidate.parsing", lang))
-    try:
-        f = await doc.get_file(timeout=60)
-        fb = await f.download_as_bytearray(timeout=60)
-        mime = getattr(doc, 'mime_type', 'image/jpeg')
-    except Exception as de:
-        logger.error(f"Resume download failed: {de}")
-        await update.message.reply_text(t("candidate.parse_fail", lang))
-        await update.message.reply_text(f"{progress(lang,1,TS)}\n\n{t('candidate.step_name', lang)}")
-        return C_NAME
-
     import os
     import re
 
@@ -84,6 +80,16 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     elif update.message.photo:
         ext = "jpg"
     ext = ext.lower()
+    raw_mime = getattr(doc, "mime_type", None) or ("image/jpeg" if update.message.photo else None)
+
+    try:
+        f = await doc.get_file(**FILE_TIMEOUTS)
+        fb = await f.download_as_bytearray(**FILE_TIMEOUTS)
+    except Exception as de:
+        logger.error(f"Resume download failed: {de}")
+        await update.message.reply_text(t("candidate.parse_fail", lang))
+        await update.message.reply_text(f"{progress(lang,1,TS)}\n\n{t('candidate.step_name', lang)}")
+        return C_NAME
 
     # Clean and build unified filename
     def clean_name(s: str) -> str:
@@ -107,6 +113,7 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     parts.append("resume")
 
     drive_filename = "_".join(parts) + f".{ext}"
+    mime = gemini.normalize_mime_type(raw_mime, drive_filename)
 
     # Always upload to Google Drive first, even if parsing fails later
     link = ""
@@ -117,48 +124,40 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception as ue:
         logger.error(f"Drive upload failed: {ue}")
 
-    # Now attempt parsing via Gemini
-    try:
-        parsed = await gemini.parse_resume(bytes(fb), mime, lang)
-        if parsed:
-            # Map Gemini keys to candidate schema keys
-            key_map = {
-                "current_city": "city",
-                "phone_whatsapp": "phone",
-                "years_experience": "years_exp",
-                "industry_experience": "industry",
-                "desired_position": "position",
-                "desired_salary": "salary",
-                "preferred_locations": "locations",
-                "available_from": "available",
-                "cambodia_experience": "cambodia_exp",
-                "needs_accommodation": "accommodation",
-                "needs_visa_support": "visa",
-            }
-            for k, v in parsed.items():
-                target_key = key_map.get(k, k)
-                if v is not None and v != "":
-                    if isinstance(v, list):
-                        d[target_key] = ", ".join(str(item) for item in v if item)
-                    elif isinstance(v, bool):
-                        d[target_key] = v
-                    else:
-                        d[target_key] = str(v).strip()
-            
-            d["raw_json"] = json.dumps(parsed, ensure_ascii=False)
-            txt, flds = candidate_review_card(d, lang)
-            await update.message.reply_text(
-                f"{t('candidate.parse_done', lang)}\n\n{txt}",
-                reply_markup=kb.review_edit_kb(flds, lang))
-            return C_REVIEW
+    parsed = await gemini.parse_resume(bytes(fb), mime, lang, drive_filename)
+    _apply_resume_parse(d, parsed)
+    txt, flds = candidate_review_card(d, lang)
+    await update.message.reply_text(
+        f"{t('candidate.parse_done', lang)}\n\n{txt}",
+        reply_markup=kb.review_edit_kb(flds, lang))
+    return C_REVIEW
+
+
+def _apply_resume_parse(data: dict, parsed: dict) -> None:
+    key_map = {
+        "current_city": "city",
+        "phone_whatsapp": "phone",
+        "years_experience": "years_exp",
+        "industry_experience": "industry",
+        "desired_position": "position",
+        "desired_salary": "salary",
+        "preferred_locations": "locations",
+        "available_from": "available",
+        "cambodia_experience": "cambodia_exp",
+        "needs_accommodation": "accommodation",
+        "needs_visa_support": "visa",
+    }
+    for k, v in parsed.items():
+        target_key = key_map.get(k, k)
+        if v is None or v == "" or v == []:
+            continue
+        if isinstance(v, list):
+            data[target_key] = ", ".join(str(item) for item in v if item)
+        elif isinstance(v, bool):
+            data[target_key] = v
         else:
-            logger.warning("Resume parsing returned empty results")
-            raise ValueError("Empty parse result")
-    except Exception as pe:
-        logger.error(f"Resume parsing failed: {pe}")
-        await update.message.reply_text(t("candidate.parse_fail", lang))
-        await update.message.reply_text(f"{progress(lang,1,TS)}\n\n{t('candidate.step_name', lang)}")
-        return C_NAME
+            data[target_key] = str(v).strip()
+    data["raw_json"] = json.dumps(parsed, ensure_ascii=False)
 
 
 async def name(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

@@ -13,7 +13,7 @@ from services.i18n import t, get_lang
 logger = logging.getLogger(__name__)
 
 # Bootstrap prompt — trilingual, hardcoded per spec
-BOOTSTRAP_PROMPT = "请选择语言 / Please select language / សូមជ្រើorg org org org org org org org org org org org org org org org"
+BOOTSTRAP_PROMPT = "请选择语言 / Please select language / សូមជ្រើសរើសភាសា"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

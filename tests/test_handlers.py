@@ -1,6 +1,7 @@
 import asyncio
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("TELEGRAM_INTERNAL_GROUP_ID", "-1001234567890")
@@ -17,13 +18,16 @@ from bot.states import (
     C_LOCATIONS,
     C_NAME,
     C_POSITION,
+    C_REVIEW,
     C_RESUME_CHOICE,
 )
 
 
 class FakeMessage:
-    def __init__(self, text=""):
+    def __init__(self, text="", document=None, photo=None):
         self.text = text
+        self.document = document
+        self.photo = photo or []
         self.replies = []
 
     async def reply_text(self, text, reply_markup=None):
@@ -48,11 +52,36 @@ class FakeUpdate:
     def __init__(self, message=None, callback_query=None):
         self.message = message
         self.callback_query = callback_query
+        self.effective_user = type(
+            "User",
+            (),
+            {"id": 123, "first_name": "Test", "last_name": "", "username": "tester"},
+        )()
 
 
 class FakeContext:
     def __init__(self):
         self.user_data = {"lang": "zh"}
+
+
+class FakeTelegramFile:
+    download_kwargs = None
+
+    async def download_as_bytearray(self, **kwargs):
+        self.download_kwargs = kwargs
+        return bytearray(b"resume bytes")
+
+
+class FakeDocument:
+    file_name = "resume.pdf"
+    mime_type = "application/pdf"
+    last_file = None
+    get_file_kwargs = None
+
+    async def get_file(self, **kwargs):
+        self.get_file_kwargs = kwargs
+        self.last_file = FakeTelegramFile()
+        return self.last_file
 
 
 def run(coro):
@@ -117,6 +146,43 @@ class CandidateHandlerTests(unittest.TestCase):
 
         self.assertEqual(state, C_AVAILABLE)
         self.assertEqual(ctx.user_data["candidate"]["locations"], {"Siem Reap"})
+
+    def test_resume_upload_empty_parse_still_opens_review(self):
+        ctx = FakeContext()
+        doc = FakeDocument()
+        update = FakeUpdate(message=FakeMessage(document=doc))
+
+        async def parse_empty(*args):
+            return {
+                "name": "",
+                "gender": "",
+                "age": "",
+                "nationality": "",
+                "current_city": "",
+                "phone_whatsapp": "",
+                "languages": [],
+                "education": "",
+                "years_experience": "",
+                "industry_experience": [],
+                "desired_position": [],
+                "desired_salary": "",
+                "preferred_locations": [],
+                "available_from": "",
+                "cambodia_experience": False,
+                "needs_accommodation": False,
+                "needs_visa_support": False,
+                "notes": "",
+            }
+
+        with patch.object(candidate.drive, "upload_file", return_value=""), \
+                patch.object(candidate.gemini, "parse_resume", side_effect=parse_empty):
+            state = run(candidate.resume_upload(update, ctx))
+
+        self.assertEqual(state, C_REVIEW)
+        self.assertEqual(doc.get_file_kwargs["read_timeout"], 60)
+        self.assertEqual(doc.last_file.download_kwargs["read_timeout"], 60)
+        self.assertIn("raw_json", ctx.user_data["candidate"])
+        self.assertTrue(any("解析完成" in reply[0] for reply in update.message.replies))
 
 
 class CompanyHandlerTests(unittest.TestCase):

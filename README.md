@@ -132,7 +132,7 @@ chmod +x install.sh
 source .venv/bin/activate
 
 # 启动 Bot
-python main.py
+.venv/bin/python main.py
 ```
 
 或者使用手动安装步骤：

@@ -86,4 +86,4 @@ async def notify_new_boss_show(bot: Bot, data: dict, user_lang: str) -> None:
 
 
 def _lang_display(lang: str) -> str:
-    return {"zh": "中文", "en": "English", "km": "ភាសorg org org org org org"}.get(lang, lang)
+    return {"zh": "中文", "en": "English", "km": "ភាស"}.get(lang, lang)
