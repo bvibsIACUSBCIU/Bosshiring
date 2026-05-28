@@ -60,9 +60,11 @@ def _opts(key: str, lang: str) -> list[str]:
 
 def lang_select_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🇨🇳 中文", callback_data="lang_zh")],
-        [InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇰🇭 ភាសាខ្មែរ", callback_data="lang_km")],
+        [
+            InlineKeyboardButton("🇨🇳 中文", callback_data="lang_zh"),
+            InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
+            InlineKeyboardButton("🇰🇭 ភាសាខ្មែរ", callback_data="lang_km"),
+        ],
     ])
 
 
@@ -72,6 +74,11 @@ def lang_select_kb() -> InlineKeyboardMarkup:
 
 def main_menu_kb(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇨🇳 中文", callback_data="lang_zh"),
+            InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
+            InlineKeyboardButton("🇰🇭 ភាសាខ្មែរ", callback_data="lang_km"),
+        ],
         [InlineKeyboardButton(t("menu.candidate", lang), callback_data="menu_candidate")],
         [InlineKeyboardButton(t("menu.company", lang), callback_data="menu_company")],
         [InlineKeyboardButton(t("menu.boss_show", lang), callback_data="menu_boss_show")],

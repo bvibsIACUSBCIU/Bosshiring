@@ -9,7 +9,7 @@ os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
 os.environ.setdefault("GOOGLE_SHEET_ID", "test-sheet-id")
 os.environ.setdefault("GOOGLE_DRIVE_FOLDER_ID", "test-drive-folder")
 
-from bot.handlers import candidate, company
+from bot.handlers import candidate, company, start
 from bot.states import (
     B_EXPERIENCE,
     B_SALARY,
@@ -20,6 +20,7 @@ from bot.states import (
     C_POSITION,
     C_REVIEW,
     C_RESUME_CHOICE,
+    MAIN_MENU,
 )
 
 
@@ -89,6 +90,20 @@ def run(coro):
 
 
 class CandidateHandlerTests(unittest.TestCase):
+    def test_start_defaults_to_chinese_main_menu_with_language_row(self):
+        ctx = FakeContext()
+        ctx.user_data = {"lang": "en", "stale": True}
+        update = FakeUpdate(message=FakeMessage())
+
+        state = run(start.start(update, ctx))
+
+        self.assertEqual(state, MAIN_MENU)
+        self.assertEqual(ctx.user_data["lang"], "zh")
+        text, markup = update.message.replies[0]
+        self.assertIn("请选择服务", text)
+        first_row = markup.inline_keyboard[0]
+        self.assertEqual([button.callback_data for button in first_row], ["lang_zh", "lang_en", "lang_km"])
+
     def test_name_callback_does_not_require_message(self):
         ctx = FakeContext()
         update = FakeUpdate(callback_query=FakeCallbackQuery("menu_candidate"))
@@ -174,13 +189,15 @@ class CandidateHandlerTests(unittest.TestCase):
                 "notes": "",
             }
 
-        with patch.object(candidate.drive, "upload_file", return_value=""), \
+        with patch.object(candidate.drive, "upload_file", return_value="") as upload, \
                 patch.object(candidate.gemini, "parse_resume", side_effect=parse_empty):
             state = run(candidate.resume_upload(update, ctx))
 
         self.assertEqual(state, C_REVIEW)
         self.assertEqual(doc.get_file_kwargs["read_timeout"], 60)
         self.assertEqual(doc.last_file.download_kwargs["read_timeout"], 60)
+        uploaded_filename = upload.call_args.args[1]
+        self.assertEqual(uploaded_filename, "123_Test_tester_resume.pdf")
         self.assertIn("raw_json", ctx.user_data["candidate"])
         self.assertTrue(any("解析完成" in reply[0] for reply in update.message.replies))
 

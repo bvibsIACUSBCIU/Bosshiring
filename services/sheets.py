@@ -21,6 +21,30 @@ _SCOPES = [
 
 _client: gspread.Client | None = None
 
+_HEADERS = {
+    "candidates": [
+        "记录ID", "提交时间", "用户语言", "状态", "姓名", "性别", "年龄", "国籍",
+        "现居城市", "Telegram用户名", "Telegram用户ID", "电话/WhatsApp",
+        "语言能力", "学历", "工作年限", "行业经验", "期望岗位", "期望薪资",
+        "可接受工作地点", "可入职时间", "柬埔寨经验", "需要住宿", "需要签证/工作证",
+        "简历链接", "附件链接", "备注", "AI摘要", "AI标签", "AI推荐岗位",
+        "AI风险提示", "原始JSON", "内部备注", "负责HR", "最后更新",
+    ],
+    "companies": [
+        "记录ID", "提交时间", "用户语言", "状态", "公司名称", "行业", "公司地址",
+        "联系人姓名", "联系人职位", "Telegram用户名", "Telegram用户ID",
+        "电话/WhatsApp", "招聘岗位", "招聘人数", "工作地点", "薪资范围",
+        "工作时间", "语言要求", "经验要求", "提供住宿", "提供签证/工作证",
+        "期望到岗时间", "岗位描述", "接受服务费条款", "企业资料链接", "备注",
+        "AI摘要", "AI标签", "原始JSON", "内部备注", "负责HR", "最后更新",
+    ],
+    "boss_show": [
+        "记录ID", "提交时间", "用户语言", "状态", "企业名称", "行业", "联系人",
+        "联系方式", "Telegram用户名", "采访主题/合作意向", "企业简介", "合作类型",
+        "内部备注", "最后更新",
+    ],
+}
+
 
 def _get_client() -> gspread.Client:
     global _client
@@ -36,9 +60,21 @@ def _get_sheet(tab_name: str) -> gspread.Worksheet:
     client = _get_client()
     spreadsheet = client.open_by_key(config.GOOGLE_SHEET_ID)
     try:
-        return spreadsheet.worksheet(tab_name)
+        ws = spreadsheet.worksheet(tab_name)
     except gspread.WorksheetNotFound:
-        return spreadsheet.add_worksheet(title=tab_name, rows=1000, cols=40)
+        ws = spreadsheet.add_worksheet(title=tab_name, rows=1000, cols=40)
+    _ensure_header(ws, tab_name)
+    return ws
+
+
+def _ensure_header(ws: gspread.Worksheet, tab_name: str) -> None:
+    header = _HEADERS.get(tab_name)
+    if not header:
+        return
+    first_row = ws.row_values(1)
+    if any(cell.strip() for cell in first_row):
+        return
+    ws.update("A1", [header], value_input_option="USER_ENTERED")
 
 
 def _next_seq(tab_name: str, prefix: str) -> str:

@@ -3,6 +3,7 @@ from pathlib import Path
 import unittest
 
 from services.i18n import validate_locales
+from services import sheets
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,31 @@ class StaticGuardTests(unittest.TestCase):
                 missing.append(f"{callback.value.id}.{callback.attr}:{node.lineno}")
 
         self.assertEqual(missing, [])
+
+    def test_sheet_header_initializes_only_empty_first_row(self):
+        class FakeWorksheet:
+            def __init__(self, first_row):
+                self.first_row = first_row
+                self.updates = []
+
+            def row_values(self, row):
+                self.assert_row = row
+                return self.first_row
+
+            def update(self, cell, values, value_input_option=None):
+                self.updates.append((cell, values, value_input_option))
+
+        empty = FakeWorksheet([])
+        sheets._ensure_header(empty, "candidates")
+
+        self.assertEqual(empty.updates[0][0], "A1")
+        self.assertEqual(empty.updates[0][1][0][0], "记录ID")
+        self.assertEqual(empty.updates[0][2], "USER_ENTERED")
+
+        existing = FakeWorksheet(["记录ID"])
+        sheets._ensure_header(existing, "candidates")
+
+        self.assertEqual(existing.updates, [])
 
 
 if __name__ == "__main__":

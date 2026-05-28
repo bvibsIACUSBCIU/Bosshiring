@@ -63,6 +63,7 @@ def main():
                 CallbackQueryHandler(start.lang_selected, pattern=r"^lang_"),
             ],
             MAIN_MENU: [
+                CallbackQueryHandler(start.lang_selected, pattern=r"^lang_"),
                 CallbackQueryHandler(candidate.entry, pattern=r"^menu_candidate$"),
                 CallbackQueryHandler(company.entry, pattern=r"^menu_company$"),
                 CallbackQueryHandler(boss_show.entry, pattern=r"^menu_boss_show$"),
