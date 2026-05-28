@@ -1,0 +1,7 @@
+python-telegram-bot[job-queue]==21.*
+google-genai>=2.7
+gspread>=6.0
+google-api-python-client>=2.100
+google-auth>=2.22
+python-dotenv>=1.0
+python-docx>=1.1
