@@ -20,6 +20,7 @@ from bot.states import (
     C_POSITION,
     C_REVIEW,
     C_RESUME_CHOICE,
+    C_WORK_EXPERIENCE,
     MAIN_MENU,
 )
 
@@ -131,14 +132,23 @@ class CandidateHandlerTests(unittest.TestCase):
         self.assertEqual(ctx.user_data["candidate"]["languages"], {"Italian"})
         self.assertEqual(len(update.message.replies), 1)
 
-    def test_industry_other_text_advances_to_position(self):
+    def test_industry_other_text_advances_to_work_experience(self):
         ctx = FakeContext()
         update = FakeUpdate(message=FakeMessage("Aviation"))
 
         state = run(candidate.industry(update, ctx))
 
-        self.assertEqual(state, C_POSITION)
+        self.assertEqual(state, C_WORK_EXPERIENCE)
         self.assertEqual(ctx.user_data["candidate"]["industry"], {"Aviation"})
+
+    def test_work_experience_text_advances_to_position(self):
+        ctx = FakeContext()
+        update = FakeUpdate(message=FakeMessage("ABC Tech | Sales | 2022-2024 | Signed 18 clients."))
+
+        state = run(candidate.work_experience(update, ctx))
+
+        self.assertEqual(state, C_POSITION)
+        self.assertIn("ABC Tech", ctx.user_data["candidate"]["work_experience"])
 
     def test_position_other_text_advances_to_salary(self):
         from bot.states import C_SALARY
@@ -179,6 +189,7 @@ class CandidateHandlerTests(unittest.TestCase):
                 "education": "",
                 "years_experience": "",
                 "industry_experience": [],
+                "work_experience": "",
                 "desired_position": [],
                 "desired_salary": "",
                 "preferred_locations": [],
@@ -199,7 +210,23 @@ class CandidateHandlerTests(unittest.TestCase):
         uploaded_filename = upload.call_args.args[1]
         self.assertEqual(uploaded_filename, "123_Test_tester_resume.pdf")
         self.assertIn("raw_json", ctx.user_data["candidate"])
+        markup = update.message.replies[-1][1]
+        upload_row = markup.inline_keyboard[-2]
+        self.assertEqual([button.callback_data for button in upload_row], ["upload_resume", "upload_attachment"])
         self.assertTrue(any("解析完成" in reply[0] for reply in update.message.replies))
+
+    def test_review_attachment_upload_sets_attachment_link(self):
+        ctx = FakeContext()
+        ctx.user_data["candidate_upload_kind"] = "attachment"
+        doc = FakeDocument()
+        update = FakeUpdate(message=FakeMessage(document=doc))
+
+        with patch.object(candidate.drive, "upload_file", return_value="https://drive.example/file") as upload:
+            state = run(candidate.review_upload(update, ctx))
+
+        self.assertEqual(state, C_REVIEW)
+        self.assertEqual(ctx.user_data["candidate"]["attachment_link"], "https://drive.example/file")
+        self.assertEqual(upload.call_args.args[1], "123_Test_tester_attachment.pdf")
 
 
 class CompanyHandlerTests(unittest.TestCase):

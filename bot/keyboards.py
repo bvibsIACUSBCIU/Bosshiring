@@ -298,6 +298,10 @@ def review_edit_kb(fields: list[tuple[str, str]], lang: str) -> InlineKeyboardMa
             InlineKeyboardButton("✏️", callback_data=f"edit_{fkey}"),
         ])
     rows.append([
+        InlineKeyboardButton(t("candidate.upload_resume_btn", lang), callback_data="upload_resume"),
+        InlineKeyboardButton(t("candidate.upload_attachment_btn", lang), callback_data="upload_attachment"),
+    ])
+    rows.append([
         InlineKeyboardButton(t("common.confirm", lang), callback_data="confirm_submit"),
         InlineKeyboardButton(t("common.cancel", lang), callback_data="confirm_cancel"),
     ])

@@ -24,6 +24,7 @@ def candidate_review_card(data: dict, lang: str) -> tuple[str, list[tuple[str, s
         ("education", "candidate.field_education"),
         ("years_exp", "candidate.field_years_exp"),
         ("industry", "candidate.field_industry"),
+        ("work_experience", "candidate.field_work_experience"),
         ("position", "candidate.field_position"),
         ("salary", "candidate.field_salary"),
         ("locations", "candidate.field_locations"),
@@ -32,6 +33,7 @@ def candidate_review_card(data: dict, lang: str) -> tuple[str, list[tuple[str, s
         ("accommodation", "candidate.field_accommodation"),
         ("visa", "candidate.field_visa"),
         ("resume", "candidate.field_resume"),
+        ("attachments", "candidate.field_attachments"),
         ("notes", "candidate.field_notes"),
     ]
 
@@ -55,6 +57,11 @@ def candidate_review_card(data: dict, lang: str) -> tuple[str, list[tuple[str, s
                 val = t("candidate.resume_uploaded", lang)
             else:
                 val = t("candidate.resume_not_uploaded", lang)
+        elif key == "attachments":
+            if data.get("attachment_link"):
+                val = t("candidate.attachments_uploaded", lang)
+            else:
+                val = t("candidate.attachments_not_uploaded", lang)
 
         line = t("candidate.review_field", lang, label=label, value=val)
         lines.append(line)

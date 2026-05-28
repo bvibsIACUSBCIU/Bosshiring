@@ -42,6 +42,7 @@ _RESUME_DEFAULTS = {
     "education": "",
     "years_experience": "",
     "industry_experience": [],
+    "work_experience": "",
     "desired_position": [],
     "desired_salary": "",
     "preferred_locations": [],

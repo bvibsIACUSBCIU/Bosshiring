@@ -17,6 +17,7 @@ FILE_TIMEOUTS = {
     "connect_timeout": 60,
     "pool_timeout": 60,
 }
+WORK_EXPERIENCE_LIMIT = 3
 
 def _d(ctx): return ctx.user_data.setdefault("candidate", {})
 def _ms(ctx, f): return ctx.user_data.setdefault(f"_ms_{f}", set())
@@ -63,15 +64,43 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             await q.edit_message_text(f"{progress(lang,1,TS)}\n\n{t('candidate.step_name', lang)}")
             return C_NAME
         if q.data == "back": return C_RESUME_CHOICE
-    doc = update.message.document or (update.message.photo[-1] if update.message.photo else None)
-    if not doc:
+    try:
+        upload = await _download_candidate_file(update, "resume")
+    except Exception as de:
+        logger.error(f"Resume download failed: {de}")
+        await update.message.reply_text(t("candidate.parse_fail", lang))
+        await update.message.reply_text(f"{progress(lang,1,TS)}\n\n{t('candidate.step_name', lang)}")
+        return C_NAME
+    if not upload:
         await update.message.reply_text(t("candidate.step_resume", lang), reply_markup=kb.skip_back_kb(lang))
         return C_RESUME_UPLOAD
     await update.message.reply_text(t("candidate.parsing", lang))
-    import os
-    import re
 
-    # Determine file extension
+    # Always upload to Google Drive first, even if parsing fails later
+    link = ""
+    try:
+        link = await drive.upload_file(upload["bytes"], upload["filename"], upload["mime"])
+        if link:
+            d["resume_link"] = link
+    except Exception as ue:
+        logger.error(f"Drive upload failed: {ue}")
+
+    parsed = await gemini.parse_resume(upload["bytes"], upload["mime"], lang, upload["filename"])
+    _apply_resume_parse(d, parsed)
+    txt, flds = candidate_review_card(d, lang)
+    await update.message.reply_text(
+        f"{t('candidate.parse_done', lang)}\n\n{txt}",
+        reply_markup=kb.review_edit_kb(flds, lang))
+    return C_REVIEW
+
+
+async def _download_candidate_file(update: Update, kind: str) -> dict | None:
+    doc = update.message.document or (update.message.photo[-1] if update.message.photo else None)
+    if not doc:
+        return None
+
+    import os
+
     ext = "pdf"
     if getattr(doc, "file_name", None):
         _, file_ext = os.path.splitext(doc.file_name)
@@ -81,25 +110,23 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ext = "jpg"
     ext = ext.lower()
     raw_mime = getattr(doc, "mime_type", None) or ("image/jpeg" if update.message.photo else None)
+    filename = _candidate_drive_filename(update.effective_user, kind, ext)
+    mime = gemini.normalize_mime_type(raw_mime, filename)
 
-    try:
-        f = await doc.get_file(**FILE_TIMEOUTS)
-        fb = await f.download_as_bytearray(**FILE_TIMEOUTS)
-    except Exception as de:
-        logger.error(f"Resume download failed: {de}")
-        await update.message.reply_text(t("candidate.parse_fail", lang))
-        await update.message.reply_text(f"{progress(lang,1,TS)}\n\n{t('candidate.step_name', lang)}")
-        return C_NAME
+    f = await doc.get_file(**FILE_TIMEOUTS)
+    fb = await f.download_as_bytearray(**FILE_TIMEOUTS)
+    return {"bytes": bytes(fb), "filename": filename, "mime": mime}
 
-    # Clean and build unified filename
+
+def _candidate_drive_filename(user, kind: str, ext: str) -> str:
+    import re
+
     def clean_name(s: str) -> str:
         if not s:
             return ""
-        s = re.sub(r'\s+', '_', s.strip())
-        s = "".join(c for c in s if c.isalnum() or c in ('_', '-'))
-        return s
+        s = re.sub(r"\s+", "_", s.strip())
+        return "".join(c for c in s if c.isalnum() or c in ("_", "-"))
 
-    user = update.effective_user
     first_name_clean = clean_name(user.first_name or "")
     last_name_clean = clean_name(user.last_name or "")
     name_part = "_".join(part for part in [first_name_clean, last_name_clean] if part)
@@ -110,27 +137,8 @@ async def resume_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         parts.append(name_part)
     if username_part:
         parts.append(username_part)
-    parts.append("resume")
-
-    drive_filename = "_".join(parts) + f".{ext}"
-    mime = gemini.normalize_mime_type(raw_mime, drive_filename)
-
-    # Always upload to Google Drive first, even if parsing fails later
-    link = ""
-    try:
-        link = await drive.upload_file(bytes(fb), drive_filename, mime)
-        if link:
-            d["resume_link"] = link
-    except Exception as ue:
-        logger.error(f"Drive upload failed: {ue}")
-
-    parsed = await gemini.parse_resume(bytes(fb), mime, lang, drive_filename)
-    _apply_resume_parse(d, parsed)
-    txt, flds = candidate_review_card(d, lang)
-    await update.message.reply_text(
-        f"{t('candidate.parse_done', lang)}\n\n{txt}",
-        reply_markup=kb.review_edit_kb(flds, lang))
-    return C_REVIEW
+    parts.append(kind)
+    return "_".join(parts) + f".{ext}"
 
 
 def _apply_resume_parse(data: dict, parsed: dict) -> None:
@@ -143,6 +151,7 @@ def _apply_resume_parse(data: dict, parsed: dict) -> None:
         "desired_salary": "salary",
         "preferred_locations": "locations",
         "available_from": "available",
+        "work_experience": "work_experience",
         "cambodia_experience": "cambodia_exp",
         "needs_accommodation": "accommodation",
         "needs_visa_support": "visa",
@@ -316,10 +325,10 @@ async def industry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review(update, ctx)
         _push(ctx, C_INDUSTRY)
-        ctx.user_data["_ms_position"] = set()
-        await update.message.reply_text(f"{progress(lang,11,TS)}\n\n{t('candidate.step_position', lang)}",
-            reply_markup=kb.position_kb(lang, set()))
-        return C_POSITION
+        await update.message.reply_text(
+            f"{progress(lang,11,TS)}\n\n{t('candidate.step_work_experience', lang)}",
+            reply_markup=kb.skip_back_kb(lang))
+        return C_WORK_EXPERIENCE
     q = update.callback_query; asyncio.create_task(q.answer())
     if q.data == "back": return _pop(ctx)
     if q.data == "ms_done":
@@ -327,9 +336,8 @@ async def industry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review_q(q, ctx)
         _push(ctx, C_INDUSTRY)
-        ctx.user_data["_ms_position"] = set()
-        await _step(q, lang, 11, TS, "candidate.step_position", kb.position_kb(lang, set()))
-        return C_POSITION
+        await _step(q, lang, 11, TS, "candidate.step_work_experience", kb.skip_back_kb(lang))
+        return C_WORK_EXPERIENCE
     if q.data.startswith("ms_"):
         val = q.data[3:]
         if val == "__other__":
@@ -340,6 +348,34 @@ async def industry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup=kb.industry_kb(lang, sel))
     return C_INDUSTRY
 
+async def work_experience(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    lang = get_lang(ctx); d = _d(ctx)
+    if update.callback_query:
+        q = update.callback_query; asyncio.create_task(q.answer())
+        if q.data == "back": return _pop(ctx)
+        if q.data == "skip":
+            d["work_experience"] = ""
+    else:
+        d["work_experience"] = _limit_work_experience(update.message.text.strip())
+    if ctx.user_data.get("edit_return"):
+        ctx.user_data.pop("edit_return"); return await _show_review(update, ctx)
+    _push(ctx, C_WORK_EXPERIENCE)
+    ctx.user_data["_ms_position"] = set()
+    msg = update.message or update.callback_query
+    if update.callback_query:
+        await _step(update.callback_query, lang, 12, TS, "candidate.step_position", kb.position_kb(lang, set()))
+    else:
+        await msg.reply_text(f"{progress(lang,12,TS)}\n\n{t('candidate.step_position', lang)}",
+            reply_markup=kb.position_kb(lang, set()))
+    return C_POSITION
+
+
+def _limit_work_experience(text: str) -> str:
+    blocks = [block.strip() for block in text.split("\n\n") if block.strip()]
+    if len(blocks) <= WORK_EXPERIENCE_LIMIT:
+        return text
+    return "\n\n".join(blocks[:WORK_EXPERIENCE_LIMIT])
+
 async def position(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     lang = get_lang(ctx); d = _d(ctx)
     sel = _ms(ctx, "position")
@@ -349,7 +385,7 @@ async def position(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review(update, ctx)
         _push(ctx, C_POSITION)
-        await update.message.reply_text(f"{progress(lang,12,TS)}\n\n{t('candidate.step_salary', lang)}",
+        await update.message.reply_text(f"{progress(lang,13,TS)}\n\n{t('candidate.step_salary', lang)}",
             reply_markup=kb.salary_candidate_kb(lang))
         return C_SALARY
     q = update.callback_query; asyncio.create_task(q.answer())
@@ -359,15 +395,15 @@ async def position(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review_q(q, ctx)
         _push(ctx, C_POSITION)
-        await _step(q, lang, 12, TS, "candidate.step_salary", kb.salary_candidate_kb(lang))
+        await _step(q, lang, 13, TS, "candidate.step_salary", kb.salary_candidate_kb(lang))
         return C_SALARY
     if q.data.startswith("ms_"):
         val = q.data[3:]
         if val == "__other__":
-            await q.edit_message_text(f"{progress(lang,11,TS)}\n\n{t('candidate.step_position', lang)}\n{t('common.or_type', lang)}")
+            await q.edit_message_text(f"{progress(lang,12,TS)}\n\n{t('candidate.step_position', lang)}\n{t('common.or_type', lang)}")
             return C_POSITION
         sel.symmetric_difference_update({val})
-        await q.edit_message_text(f"{progress(lang,11,TS)}\n\n{t('candidate.step_position', lang)}",
+        await q.edit_message_text(f"{progress(lang,12,TS)}\n\n{t('candidate.step_position', lang)}",
             reply_markup=kb.position_kb(lang, sel))
     return C_POSITION
 
@@ -385,9 +421,9 @@ async def salary(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     _push(ctx, C_SALARY)
     ctx.user_data["_ms_locations"] = set()
     if update.callback_query:
-        await _step(update.callback_query, lang, 13, TS, "candidate.step_locations", kb.location_kb(lang, set()))
+        await _step(update.callback_query, lang, 14, TS, "candidate.step_locations", kb.location_kb(lang, set()))
     else:
-        await update.message.reply_text(f"{progress(lang,13,TS)}\n\n{t('candidate.step_locations', lang)}",
+        await update.message.reply_text(f"{progress(lang,14,TS)}\n\n{t('candidate.step_locations', lang)}",
             reply_markup=kb.location_kb(lang, set()))
     return C_LOCATIONS
 
@@ -400,7 +436,7 @@ async def locations(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review(update, ctx)
         _push(ctx, C_LOCATIONS)
-        await update.message.reply_text(f"{progress(lang,14,TS)}\n\n{t('candidate.step_available', lang)}",
+        await update.message.reply_text(f"{progress(lang,15,TS)}\n\n{t('candidate.step_available', lang)}",
             reply_markup=kb.available_kb(lang))
         return C_AVAILABLE
     q = update.callback_query; asyncio.create_task(q.answer())
@@ -410,15 +446,15 @@ async def locations(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review_q(q, ctx)
         _push(ctx, C_LOCATIONS)
-        await _step(q, lang, 14, TS, "candidate.step_available", kb.available_kb(lang))
+        await _step(q, lang, 15, TS, "candidate.step_available", kb.available_kb(lang))
         return C_AVAILABLE
     if q.data.startswith("ms_"):
         val = q.data[3:]
         if val == "__other__":
-            await q.edit_message_text(f"{progress(lang,13,TS)}\n\n{t('candidate.step_locations', lang)}\n{t('common.or_type', lang)}")
+            await q.edit_message_text(f"{progress(lang,14,TS)}\n\n{t('candidate.step_locations', lang)}\n{t('common.or_type', lang)}")
             return C_LOCATIONS
         sel.symmetric_difference_update({val})
-        await q.edit_message_text(f"{progress(lang,13,TS)}\n\n{t('candidate.step_locations', lang)}",
+        await q.edit_message_text(f"{progress(lang,14,TS)}\n\n{t('candidate.step_locations', lang)}",
             reply_markup=kb.location_kb(lang, sel))
     return C_LOCATIONS
 
@@ -428,7 +464,7 @@ async def available(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query; asyncio.create_task(q.answer())
         if q.data == "back": return _pop(ctx)
         if q.data == "avail_other":
-            await q.edit_message_text(f"{progress(lang,14,TS)}\n\n{t('candidate.step_available', lang)}\n{t('common.or_type', lang)}")
+            await q.edit_message_text(f"{progress(lang,15,TS)}\n\n{t('candidate.step_available', lang)}\n{t('common.or_type', lang)}")
             return C_AVAILABLE
         d["available"] = q.data.replace("avail_","")
     else:
@@ -438,9 +474,9 @@ async def available(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     _push(ctx, C_AVAILABLE)
     ctx.user_data["_ms_extras"] = set()
     if update.callback_query:
-        await _step(update.callback_query, lang, 15, TS, "candidate.step_extras", kb.extras_kb(lang, set()))
+        await _step(update.callback_query, lang, 16, TS, "candidate.step_extras", kb.extras_kb(lang, set()))
     else:
-        await update.message.reply_text(f"{progress(lang,15,TS)}\n\n{t('candidate.step_extras', lang)}",
+        await update.message.reply_text(f"{progress(lang,16,TS)}\n\n{t('candidate.step_extras', lang)}",
             reply_markup=kb.extras_kb(lang, set()))
     return C_EXTRAS
 
@@ -455,13 +491,13 @@ async def extras(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         if ctx.user_data.get("edit_return"):
             ctx.user_data.pop("edit_return"); return await _show_review_q(q, ctx)
         _push(ctx, C_EXTRAS)
-        await q.edit_message_text(f"{progress(lang,16,TS)}\n\n{t('candidate.step_notes', lang)}",
+        await q.edit_message_text(f"{progress(lang,17,TS)}\n\n{t('candidate.step_notes', lang)}",
             reply_markup=kb.skip_back_kb(lang))
         return C_NOTES
     if q.data.startswith("ms_"):
         val = q.data[3:]
         sel.symmetric_difference_update({val})
-        await q.edit_message_text(f"{progress(lang,15,TS)}\n\n{t('candidate.step_extras', lang)}",
+        await q.edit_message_text(f"{progress(lang,16,TS)}\n\n{t('candidate.step_extras', lang)}",
             reply_markup=kb.extras_kb(lang, sel))
     return C_EXTRAS
 
@@ -494,6 +530,7 @@ _EDIT_MAP = {
     "nationality": C_NATIONALITY, "city": C_CITY, "phone": C_PHONE,
     "languages": C_LANGUAGES, "education": C_EDUCATION,
     "years_exp": C_YEARS_EXP, "industry": C_INDUSTRY,
+    "work_experience": C_WORK_EXPERIENCE,
     "position": C_POSITION, "salary": C_SALARY,
     "locations": C_LOCATIONS, "available": C_AVAILABLE,
     "cambodia_exp": C_EXTRAS, "accommodation": C_EXTRAS,
@@ -507,9 +544,24 @@ async def review(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data.clear()
         await q.edit_message_text(t("common.cancel_confirm", lang))
         return ConversationHandler.END
+    if q.data in {"skip", "back"} and ctx.user_data.get("candidate_upload_kind"):
+        ctx.user_data.pop("candidate_upload_kind", None)
+        return await _show_review_q(q, ctx)
     if q.data == "noop": return C_REVIEW
+    if q.data in {"upload_resume", "upload_attachment"}:
+        kind = "resume" if q.data == "upload_resume" else "attachment"
+        ctx.user_data["candidate_upload_kind"] = kind
+        key = "candidate.step_resume" if kind == "resume" else "candidate.step_attachment"
+        await q.edit_message_text(t(key, lang), reply_markup=kb.skip_back_kb(lang))
+        return C_REVIEW
     if q.data.startswith("edit_"):
         field = q.data.replace("edit_", "")
+        if field in {"resume", "attachments"}:
+            kind = "resume" if field == "resume" else "attachment"
+            ctx.user_data["candidate_upload_kind"] = kind
+            key = "candidate.step_resume" if kind == "resume" else "candidate.step_attachment"
+            await q.edit_message_text(t(key, lang), reply_markup=kb.skip_back_kb(lang))
+            return C_REVIEW
         ctx.user_data["edit_return"] = True
         state = _EDIT_MAP.get(field, C_REVIEW)
         # Re-send the appropriate step
@@ -524,12 +576,13 @@ async def review(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             C_EDUCATION: ("candidate.step_education", kb.education_kb(lang), 8),
             C_YEARS_EXP: ("candidate.step_years_exp", kb.years_exp_kb(lang), 9),
             C_INDUSTRY: ("candidate.step_industry", kb.industry_kb(lang, set()), 10),
-            C_POSITION: ("candidate.step_position", kb.position_kb(lang, set()), 11),
-            C_SALARY: ("candidate.step_salary", kb.salary_candidate_kb(lang), 12),
-            C_LOCATIONS: ("candidate.step_locations", kb.location_kb(lang, set()), 13),
-            C_AVAILABLE: ("candidate.step_available", kb.available_kb(lang), 14),
-            C_EXTRAS: ("candidate.step_extras", kb.extras_kb(lang, set()), 15),
-            C_NOTES: ("candidate.step_notes", kb.skip_back_kb(lang), 16),
+            C_WORK_EXPERIENCE: ("candidate.step_work_experience", kb.skip_back_kb(lang), 11),
+            C_POSITION: ("candidate.step_position", kb.position_kb(lang, set()), 12),
+            C_SALARY: ("candidate.step_salary", kb.salary_candidate_kb(lang), 13),
+            C_LOCATIONS: ("candidate.step_locations", kb.location_kb(lang, set()), 14),
+            C_AVAILABLE: ("candidate.step_available", kb.available_kb(lang), 15),
+            C_EXTRAS: ("candidate.step_extras", kb.extras_kb(lang, set()), 16),
+            C_NOTES: ("candidate.step_notes", kb.skip_back_kb(lang), 17),
         }
         info = step_map.get(state)
         if info:
@@ -538,6 +591,28 @@ async def review(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             await q.edit_message_text(txt, reply_markup=markup)
         return state
     return C_REVIEW
+
+
+async def review_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    lang = get_lang(ctx); d = _d(ctx)
+    kind = ctx.user_data.pop("candidate_upload_kind", "attachment")
+    try:
+        upload = await _download_candidate_file(update, kind)
+        if not upload:
+            await update.message.reply_text(t("candidate.step_attachment", lang), reply_markup=kb.skip_back_kb(lang))
+            return C_REVIEW
+        link = await drive.upload_file(upload["bytes"], upload["filename"], upload["mime"])
+        if not link:
+            raise ValueError("empty drive link")
+        if kind == "resume":
+            d["resume_link"] = link
+        else:
+            d["attachment_link"] = link
+        await update.message.reply_text(t("common.upload_success", lang))
+    except Exception as e:
+        logger.error(f"Candidate {kind} upload failed: {e}")
+        await update.message.reply_text(t("common.upload_fail", lang))
+    return await _show_review(update, ctx)
 
 async def _submit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query; lang = get_lang(ctx); d = _d(ctx)
@@ -552,6 +627,7 @@ async def _submit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             languages=", ".join(d["languages"]) if isinstance(d.get("languages"), set) else str(d.get("languages","")),
             education=d.get("education",""), years_experience=d.get("years_exp",""),
             industry_experience=", ".join(d["industry"]) if isinstance(d.get("industry"), set) else str(d.get("industry","")),
+            work_experience=d.get("work_experience",""),
             desired_position=", ".join(d["position"]) if isinstance(d.get("position"), set) else str(d.get("position","")),
             desired_salary=d.get("salary",""),
             preferred_locations=", ".join(d["locations"]) if isinstance(d.get("locations"), set) else str(d.get("locations","")),
@@ -560,6 +636,7 @@ async def _submit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             needs_accommodation="Yes" if d.get("accommodation") else "No",
             needs_visa_support="Yes" if d.get("visa") else "No",
             resume_drive_link=d.get("resume_link",""),
+            attachment_drive_link=d.get("attachment_link",""),
             notes=d.get("notes",""),
             raw_json=d.get("raw_json",""),
         )

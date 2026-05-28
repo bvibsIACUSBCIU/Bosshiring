@@ -108,6 +108,10 @@ def main():
                 CallbackQueryHandler(candidate.industry, pattern=r"^(ms_|back$)"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, candidate.industry),
             ],
+            C_WORK_EXPERIENCE: [
+                CallbackQueryHandler(candidate.work_experience, pattern=r"^(skip|back)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, candidate.work_experience),
+            ],
             C_POSITION: [
                 CallbackQueryHandler(candidate.position, pattern=r"^(ms_|back$)"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, candidate.position),
@@ -129,7 +133,10 @@ def main():
                 CallbackQueryHandler(candidate.notes, pattern=r"^(skip|back)$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, candidate.notes),
             ],
-            C_REVIEW: [CallbackQueryHandler(candidate.review, pattern=r"^(confirm_submit|confirm_cancel|noop|edit_)")],
+            C_REVIEW: [
+                CallbackQueryHandler(candidate.review, pattern=r"^(confirm_submit|confirm_cancel|noop|edit_|upload_|skip|back)"),
+                MessageHandler(filters.Document.ALL | filters.PHOTO, candidate.review_upload),
+            ],
 
             # ── Company flow ──
             B_COMPANY_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, company.company_name)],

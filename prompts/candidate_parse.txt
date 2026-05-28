@@ -12,6 +12,7 @@ Required JSON structure:
   "education": "",
   "years_experience": "",
   "industry_experience": [],
+  "work_experience": "",
   "desired_position": [],
   "desired_salary": "",
   "preferred_locations": [],
@@ -26,4 +27,5 @@ Rules:
 - If a field cannot be determined from the document, use empty string "" or empty array [] or false.
 - For languages, list each language the candidate speaks.
 - For age, if birth date is given, calculate the age.
+- For work_experience, summarize up to 3 jobs. Each job should include company name, position, time period, work content, and achievements when available, following STAR logic.
 - Return ONLY the JSON object, nothing else.

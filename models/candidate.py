@@ -23,6 +23,7 @@ class CandidateRecord:
     education: str = ""
     years_experience: str = ""
     industry_experience: str = ""
+    work_experience: str = ""
     desired_position: str = ""
     desired_salary: str = ""
     preferred_locations: str = ""
@@ -50,7 +51,7 @@ class CandidateRecord:
             self.current_city, self.telegram_username, str(self.telegram_user_id),
             self.phone_whatsapp, self.languages, self.education,
             self.years_experience, self.industry_experience,
-            self.desired_position, self.desired_salary,
+            self.work_experience, self.desired_position, self.desired_salary,
             self.preferred_locations, self.available_from,
             self.cambodia_experience, self.needs_accommodation,
             self.needs_visa_support, self.resume_drive_link,
