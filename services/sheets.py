@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone, timedelta
 
 import gspread
@@ -95,10 +96,8 @@ def _next_seq(tab_name: str, prefix: str) -> str:
         return f"{prefix}-{today}-{now_time}-{rand_suffix}"
 
 
-async def append_row(tab_name: str, row: list[str], prefix: str) -> str:
-    """Append a row to the specified sheet tab. Returns the record_id.
-    Retries once after 3s on failure. On second failure, writes to failed_submissions.jsonl and propagates the exception.
-    """
+def _append_row_sync(tab_name: str, row: list[str], prefix: str) -> str:
+    """Synchronous helper to append a row to Google Sheets with retry logic."""
     record_id = _next_seq(tab_name, prefix)
     row[0] = record_id  # Ensure record_id is set
     row[1] = datetime.now(timezone(timedelta(hours=7))).isoformat()  # submitted_at
@@ -112,13 +111,18 @@ async def append_row(tab_name: str, row: list[str], prefix: str) -> str:
         except Exception as e:
             logger.error(f"Sheets append attempt {attempt+1} failed: {e}")
             if attempt == 0:
-                await asyncio.sleep(3)
+                time.sleep(3)
             else:
                 _write_failed(tab_name, row, str(e))
                 raise e
-
-
     return record_id
+
+
+async def append_row(tab_name: str, row: list[str], prefix: str) -> str:
+    """Append a row to the specified sheet tab. Returns the record_id.
+    Retries once after 3s on failure. On second failure, writes to failed_submissions.jsonl and propagates the exception.
+    """
+    return await asyncio.to_thread(_append_row_sync, tab_name, row, prefix)
 
 
 def _write_failed(tab_name: str, row: list[str], error: str) -> None:

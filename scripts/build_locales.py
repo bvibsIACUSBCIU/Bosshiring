@@ -38,6 +38,8 @@ data["common"]["timeout_msg"] = "\u23f1 \u179c\u1782\u17d2\u1782\u1795\u17bb\u17
 data["common"]["upload_file"] = "\U0001f4ce \u1795\u17d2\u1791\u17bb\u1780\u17af\u1780\u179f\u17b6\u179a"
 data["common"]["manual_fill"] = "\u270f\ufe0f \u1794\u17c6\u1796\u17c1\u1789\u178a\u17c4\u1799\u1781\u17d2\u179b\u17bd\u1793\u17af\u1784"
 data["common"]["negotiate"] = "\u1785\u179a\u1785\u17b6"
+data["common"]["submit_fail"] = "⚠️ ការដាក់ស្នើបានបរាជ័យដោយសារតែកំហុសប្រព័ន្ធ។ សូមព្យាយាមម្តងទៀតនៅពេលក្រោយ ឬទាក់ទងផ្នែកគាំទ្រ។"
+data["common"]["submitting"] = "⏳ កំពុងដាក់ស្នើ សូមរង់ចាំ..."
 
 # -- Candidate field labels --
 data["candidate"]["welcome"] = "\U0001f4bc \u1785\u17bb\u17c7\u1788\u17d2\u1798\u17c4\u17c7\u179f\u17d2\u179c\u17c2\u1784\u179a\u1780\u1780\u17b6\u179a\u1784\u17b6\u179a\n\n\u1781\u17d2\u1789\u17bb\u17c6\u1793\u17b9\u1784\u178e\u17c2\u1793\u17b6\u17c6\u17a2\u17d2\u1793\u1780\u17d4 \u1795\u17d2\u1789\u17be /cancel \u178a\u17be\u1798\u17d2\u1794\u17b8\u1794\u17c4\u17c7\u1794\u1784\u17cb\u17d4"

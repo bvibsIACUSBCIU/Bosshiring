@@ -313,7 +313,9 @@ async def _show_review_q(q, ctx) -> int:
 
 async def review(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query; asyncio.create_task(q.answer()); lang = get_lang(ctx)
-    if q.data == "confirm_submit": return await _submit(update, ctx)
+    if q.data == "confirm_submit":
+        await q.edit_message_text(t("common.submitting", lang))
+        return await _submit(update, ctx)
     if q.data == "confirm_cancel":
         ctx.user_data.clear()
         await q.edit_message_text(t("common.cancel_confirm", lang))
@@ -394,5 +396,10 @@ async def _submit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     except Exception as e:
         logger.error(f"Company submit failed: {e}")
-        await q.edit_message_text(t("common.submit_fail", lang))
+        txt, flds = company_review_card(d, lang)
+        error_msg = f"❌ {t('common.submit_fail', lang)}\n\n"
+        try:
+            await q.edit_message_text(error_msg + txt, reply_markup=kb.review_edit_kb(flds, lang))
+        except Exception:
+            await q.message.reply_text(error_msg + txt, reply_markup=kb.review_edit_kb(flds, lang))
         return B_REVIEW

@@ -1,6 +1,7 @@
 """
 services/gemini.py — Resume parsing and summary generation via Gemini AI.
 """
+import asyncio
 import json
 import logging
 import mimetypes
@@ -128,7 +129,8 @@ async def parse_resume(file_bytes: bytes, mime_type: str, lang: str, filename: s
     try:
         prompt = _read_prompt("candidate_parse.txt")
         normalized_mime = normalize_mime_type(mime_type, filename)
-        response = _client.models.generate_content(
+        response = await asyncio.to_thread(
+            _client.models.generate_content,
             model=_MODEL,
             contents=[
                 prompt,
@@ -153,7 +155,11 @@ async def generate_candidate_summary(data: dict, lang: str) -> dict:
             data=json.dumps(data, cls=SetEncoder, ensure_ascii=False, indent=2),
             lang_instruction=lang_instruction,
         )
-        response = _client.models.generate_content(model=_MODEL, contents=prompt)
+        response = await asyncio.to_thread(
+            _client.models.generate_content,
+            model=_MODEL,
+            contents=prompt,
+        )
         text = response.text.strip()
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
@@ -176,7 +182,11 @@ async def generate_company_summary(data: dict, lang: str) -> dict:
             data=json.dumps(data, cls=SetEncoder, ensure_ascii=False, indent=2),
             lang_instruction=lang_instruction,
         )
-        response = _client.models.generate_content(model=_MODEL, contents=prompt)
+        response = await asyncio.to_thread(
+            _client.models.generate_content,
+            model=_MODEL,
+            contents=prompt,
+        )
         text = response.text.strip()
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()

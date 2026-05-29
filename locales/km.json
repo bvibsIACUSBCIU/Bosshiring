@@ -29,7 +29,8 @@
     "upload_file": "📎 ផ្ទុកឯកសារ",
     "manual_fill": "✏️ បំពេញដោយខ្លួនឯង",
     "negotiate": "ចរចា",
-    "submit_fail": "⚠️ ការដាក់ស្នើបានបរាជ័យដោយសារតែកំហុសប្រព័ន្ធ។ សូមព្យាយាមម្តងទៀតនៅពេលក្រោយ ឬទាក់ទងផ្នែកគាំទ្រ។"
+    "submit_fail": "⚠️ ការដាក់ស្នើបានបរាជ័យដោយសារតែកំហុសប្រព័ន្ធ។ សូមព្យាយាមម្តងទៀតនៅពេលក្រោយ ឬទាក់ទងផ្នែកគាំទ្រ។",
+    "submitting": "⏳ កំពុងដាក់ស្នើ សូមរង់ចាំ..."
   },
   "candidate": {
     "welcome": "💼 ចុះឈ្មោះស្វែងរកការងារ\n\nខ្ញុំនឹងណែនាំអ្នក។ ផ្ញើ /cancel ដើម្បីបោះបង់។",
@@ -49,7 +50,7 @@
     "step_locations": "ទីតាំងការងារ (ជ្រើសច្រើន):",
     "step_available": "រៀបចាប់ផ្តើមការងារ:",
     "step_extras": "សូមគូសទាំងអស់ដែលសមស្រប:",
-    "step_resume": "សូមផ្ទុកប្រវត្តិរ    (PDF/Word/រូបភាព) ឬចុចរំលង:",
+    "step_resume": "សូមផ្ទុកប្រវត្តិរ  (PDF) ឬចុចរំលង:",
     "step_attachment": "Please upload photo(s) / certificate(s), or tap Skip:",
     "step_notes": "កំណត់សម្គាល់ប         (ជ         ):",
     "parsing": "⏳ AI កំពុងវិភាគប្រវត្តិរូបរបស់អ្នក...",
@@ -149,8 +150,8 @@
   },
   "boss_show": {
     "intro_title": "🎬 Boss Show",
-    "intro_body": "«Boss Show» ។\n\n:",
-    "apply_btn": "📝 ស្ន",
+    "intro_body": "«Boss Show»                               ។\n\n           :",
+    "apply_btn": "📝 ស្ន                ",
     "step_company": "Company name:",
     "step_industry": "Industry:",
     "step_contact": "Contact person name:",
@@ -162,7 +163,7 @@
     "intent_brand": "Brand Exposure",
     "intent_hire": "Recruitment Partnership",
     "review_title": "📋 Please confirm collaboration request:",
-    "submit_success": "✅ !",
+    "submit_success": "✅                      !",
     "field_company": "Company",
     "field_industry": "Industry",
     "field_contact": "Contact",

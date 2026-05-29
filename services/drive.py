@@ -1,6 +1,7 @@
 """
 services/drive.py — Upload files to Google Drive and return share links.
 """
+import asyncio
 import io
 import logging
 
@@ -26,14 +27,12 @@ def _get_service():
     return _service
 
 
-async def upload_file(
+def _upload_file_sync(
     file_bytes: bytes,
     filename: str,
     mime_type: str,
 ) -> str:
-    """Upload file to Drive folder and return a shareable link.
-    Returns empty string on failure (does not raise).
-    """
+    """Synchronous implementation of file upload."""
     try:
         service = _get_service()
         file_metadata = {
@@ -62,3 +61,14 @@ async def upload_file(
     except Exception as e:
         logger.error(f"Drive upload failed for {filename}: {e}")
         return ""
+
+
+async def upload_file(
+    file_bytes: bytes,
+    filename: str,
+    mime_type: str,
+) -> str:
+    """Upload file to Drive folder and return a shareable link.
+    Returns empty string on failure (does not raise).
+    """
+    return await asyncio.to_thread(_upload_file_sync, file_bytes, filename, mime_type)

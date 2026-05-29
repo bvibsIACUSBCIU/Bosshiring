@@ -29,7 +29,8 @@
     "upload_file": "📎 Upload File",
     "manual_fill": "✏️ Fill Manually",
     "negotiate": "Negotiable",
-    "submit_fail": "⚠️ Submission failed due to a system error. Please try again later or contact support."
+    "submit_fail": "⚠️ Submission failed due to a system error. Please try again later or contact support.",
+    "submitting": "⏳ Submitting, please wait..."
   },
   "candidate": {
     "welcome": "💼 Job Seeker Registration\n\nI will guide you through the form. Send /cancel at any time to cancel.",
@@ -49,7 +50,7 @@
     "step_locations": "Acceptable work locations (multi-select):",
     "step_available": "Available to start:",
     "step_extras": "Please check all that apply:",
-    "step_resume": "Please upload your resume (PDF / Word / image), or tap Skip:",
+    "step_resume": "Please upload your resume (PDF), or tap Skip:",
     "step_attachment": "Please upload photo(s) / certificate(s), or tap Skip:",
     "step_notes": "Any additional notes (optional):",
     "parsing": "⏳ AI is parsing your resume, please wait...",
